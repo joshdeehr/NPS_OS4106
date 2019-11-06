@@ -1,0 +1,106 @@
+## Library for titanic dataset
+library(titanic)
+
+## Libraries for Plotting our Results
+library(ggplot2)
+library(gridExtra)
+library(dplyr)
+
+## Library for confusion matrix
+library(caret)
+library(e1071)
+
+## Load the datasets
+data("titanic_train") ## We will use this dataset as a whole since titanic_test does not have the ddata for survived information
+
+# remove any NAs from the dataset
+titanic_train<- na.omit(titanic_train)
+sum(is.na(titanic_train$Survived))
+
+## In order to plot them, the response has to be character not integer.  So we will convert them as character. 
+tmp_titanic <- titanic_train
+tmp_titanic$Survived <- as.character(tmp_titanic$Survived)
+
+## Plot the actual data
+plotData <- ggplot(data =tmp_titanic,
+                   mapping = aes(x = Age, y = Pclass, color = Survived, shape = Sex)) +
+  layer(geom = "point", stat = "identity", position = "identity") +
+  scale_color_manual(values = c("0" = "blue", "1" = "red"), labels = c("No", "Yes")) +
+  theme_bw() +
+  theme(legend.key = element_blank()) +
+  labs(title = "Original data")
+plotData
+
+# Partition of data set into 80% Train and 20% Test datasets
+set.seed(123)  # ensures we all get the sample sample of data for train/test
+
+sampler <- sample(nrow(titanic_train),trunc(nrow(titanic_train)*.80)) # samples index 
+
+Lab.Train <- titanic_train[sampler,]
+Lab.Test <- titanic_train[-sampler,]
+
+Logit.1 <- glm(formula = Survived ~ Age+Pclass+Sex,
+               family  = binomial(link = "logit"),
+               data    = Lab.Train)
+summary(Logit.1)
+
+## Fit logistic regression using only scaled numerical predictors
+Logit.2 <- glm(formula = Survived ~ scale(Age) + scale(Pclass),
+               family  = binomial(link = "logit"),
+               data    = Lab.Train)
+summary(Logit.2)
+
+# Conduct stepwise model selection
+Logit.step<-step(Logit.1, direction = "both")
+
+# Summarize the selected model
+summary(Logit.step)
+
+# Put the predicted probability and class (at 0.5 threshold) at the end of the dataframe
+predProbLogit <- predict(Logit.step, type = "response", newdata = Lab.Test)
+predClassLogit <- factor(predict(Logit.step, type = "response", newdata=Lab.Test) > 0.5, levels = c(FALSE, TRUE), labels = c(0,1))
+
+# Create a plotting version of the Default dataset where we will store model predictions
+Lab.Test.Plotting <- Lab.Test
+
+# Put the predicted probability and class (at 0.5 threshold) at the end of the plotting dataframe
+Lab.Test.Plotting$predProbLogit <- predProbLogit
+Lab.Test.Plotting$predClassLogit <- predClassLogit
+
+#convert Survived to factor for better plotting
+Lab.Test.Plotting2 <- Lab.Test.Plotting %>% 
+  mutate(Survived=as.factor(Survived))
+
+
+summary(Lab.Test.Plotting)  # look at a summary of the updated data frame
+
+# Plot the actual test data
+plotTest<-ggplot(data = Lab.Test.Plotting2,
+                 mapping = aes(x = Age, y = as.factor(Pclass), color = Survived, shape = Sex)) +
+  layer(geom = "point", stat = "identity", position = "identity") +
+  scale_color_manual(values = c("1" = "blue", "0" = "red"), labels = c("No", "Yes")) +
+  theme_bw() +
+  theme(legend.key = element_blank()) +
+  labs(title = "Test Data Actual Outcome", y = "Passenger Class")
+
+plotLogit <- ggplot(data = Lab.Test.Plotting,
+                    mapping = aes(x = Age, y = as.factor(Pclass), color = predProbLogit, shape = Sex)) +
+  layer(geom = "point",stat = "identity", position = "identity") +
+  scale_color_gradient(low = "red", high = "blue") +
+  theme_bw() +
+  theme(legend.key = element_blank()) +
+  labs(title = "Predicted probability of outcome (Logistic)", y = "Passenger Class", color = "Chance of Survival")
+
+## Plot the class using threshold of 0.5
+plotLogitClass <- ggplot(data = Lab.Test.Plotting,
+                         mapping = aes(x = Age, y = as.factor(Pclass), color = predClassLogit, shape = Sex)) +
+  layer(geom = "point", stat = "identity", position = "identity") +
+  scale_color_manual(values = c("1" = "blue", "0" = "red"), labels = c("No", "Yes")) +
+  theme_bw() +
+  theme(legend.key = element_blank()) +
+  labs(title = "Predicted outcome (Logistic; p>0.5)", y = "Passenger Class", color = "Chance of Survival")
+
+# Plot original data (top row) and predicted probability (bottom row)
+grid.arrange(plotTest, plotLogit, plotLogitClass, nrow = 3)
+
+confusionMatrix(data=factor(predClassLogit), reference=factor(Lab.Test$Survived))
