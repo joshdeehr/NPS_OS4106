@@ -1,0 +1,283 @@
+# Set working directory
+setwd("~/TakeHomeLab")
+
+# Load library
+library(ISLR)
+library(glmnet)
+library(leaps)
+
+
+################################# CREDIT DATA SET #################################
+
+# Load the Credit Data Set
+data(Credit)
+
+# Check for NAs
+sum(is.na(Credit))
+
+
+##### Best subset selection #####
+regfit.full <- regsubsets(Balance ~., Credit)
+    # Using nvmax sets the number of variables to test model for
+    #regfit.full <- regsubsets(Balance ~., Credit, nvmax =12)
+  summary(regfit.full)
+
+  # This will create a plot that helps us determine how many variables to retain
+  reg.summary =summary (regfit.full)
+  par(mfrow=c(2,2))
+  
+  which.min(reg.summary$rss)
+  plot(reg.summary$rss ,xlab="Number of Variables ",ylab="RSS", type="l")
+  points(8,reg.summary$rss [8],col="red",cex=2,pch =20)
+  
+  which.max(reg.summary$adjr2)
+  plot(reg.summary$adjr2 ,xlab="Number of Variables ", ylab="Adjusted RSq",type="l")
+  points(7,reg.summary$adjr2 [7],col="red",cex=2,pch =20)
+  
+  which.min(reg.summary$cp)
+  plot(reg.summary$cp ,xlab="Number of Variables ",ylab="Cp", type="l") 
+  points (6,reg.summary$cp [6],col="red",cex=2,pch=20) 
+  
+  which.min(reg.summary$bic) 
+  plot(reg.summary$bic ,xlab="Number of Variables ",ylab="BIC", type="l") 
+  points(4,reg.summary$bic [4],col="red",cex=2,pch =20)   
+
+
+######## Ridge Regression ######## 
+
+######### Using the explanatory variables selected by Best Suset Selection ##########
+# Clean data
+#x <- model.matrix(Balance~.,Credit)[,c(1,3:8)]
+#y <- Credit$Balance
+
+# Setting a training and testing sets
+#set.seed(1)
+#train <- sample(1:nrow(x), round(nrow(x))/2)
+#test <- (-train)
+
+#x.train <- x[train,]### We are setting training sets for the explanatory variables x and response variable y
+#y.train <- y[train]
+#x.test <- x[test,]### We are setting test sets for the explanatory variables x and response variable y
+#y.test <- y[test]
+
+# Set lambda
+#grid <- 10^seq(10,-2,length=100)
+#ridge.mod <- glmnet(x.train, y.train, alpha = 0, lambda = grid, thresh = 1e-12)
+
+# Find best lambda
+#set.seed (1)
+#cv.out <- cv.glmnet(x.train, y.train, alpha = 0)
+#plot(cv.out)
+#(bestlam <- cv.out$lambda.min)
+
+# Estimate Coefficients
+#ridge.pred <- predict(ridge.mod, s=bestlam, newx=x.test)
+#mean((ridge.pred - y.test)^2)
+
+#out <- glmnet(x,y,alpha=0)
+#predict(out, type="coefficients", s=bestlam)[1:8,]
+
+######### Using the explanatory variables selected by Best Suset Selection ##########
+x <- model.matrix(Balance~.,Credit)[,3:6]
+y <- Credit$Balance
+
+set.seed(1)
+train <- sample(1:nrow(x), round(nrow(x))/2)
+test <- (-train)
+
+x.train <- x[train,] ### We are setting training sets for the explanatory variables x and response variable y
+y.train <- y[train]
+x.test <- x[test,]### We are setting test sets for the explanatory variables x and response variable y
+y.test <- y[test]
+
+# Set lambda
+grid <- 10^seq(10,-2,length=100)
+ridge.mod <- glmnet(x.train, y.train, alpha = 0, lambda = grid, thresh = 1e-12)
+
+#find best lambda
+set.seed(1)
+cv.out <- cv.glmnet(x.train, y.train, alpha = 0)
+plot(cv.out)
+(bestlam <- cv.out$lambda.min)
+
+# Estimate Coefficients
+ridge.pred <- predict(ridge.mod, s=bestlam, newx=x.test)
+mean((ridge.pred - y.test)^2) #  This shows the MSE with the test set.
+
+out <- glmnet(x,y,alpha=0)
+predict(out, type="coefficients", s=bestlam)[1:5,]
+
+######## LASSO ########
+# Using the numeric variables 
+x <- model.matrix(Balance~.,Credit)[,3:10]
+y <- Credit$Balance
+
+set.seed(1)
+train <- sample(1:nrow(x), round(nrow(x))/2)
+test <- (-train)
+
+x.train <- x[train,] ### We are setting training sets for the explanatory variables x and response variable y
+y.train <- y[train]
+x.test <- x[test,]### We are setting test sets for the explanatory variables x and response variable y
+y.test <- y[test]
+
+# Set lambda
+grid <- 10^seq(10,-2,length=100)
+lasso.mod <- glmnet(x.train, y.train, alpha = 1, lambda = grid, thresh = 1e-12)
+
+#find best lambda
+set.seed(1)
+cv.out <- cv.glmnet(x.train, y.train, alpha = 1)
+plot(cv.out)
+(bestlam <- cv.out$lambda.min)
+
+# Estimate Coefficients
+lasso.pred <- predict(lasso.mod, s=bestlam, newx=x.test)
+mean((lasso.pred - y.test)^2) #  This shows the MSE with the test set.
+
+out <- glmnet(x, y, alpha=1)
+predict(out, type="coefficients", s=bestlam)[1:9,]
+
+
+################################# AUTO DATA SET #################################
+
+# Load the Auto Data Set
+data(Auto)
+
+# Check for NAs
+sum(is.na(Credit))
+
+##### Best subset selection #####
+regfit.full <- regsubsets(mpg ~cylinders+displacement+horsepower+weight+acceleration+year, Auto)
+# Using nvmax sets the number of variables to test model for
+#regfit.full <- regsubsets(Balance ~., Credit, nvmax =12)
+summary(regfit.full)
+
+# This will create a plot that helps us determine how many variables to retain
+reg.summary =summary (regfit.full)
+par(mfrow=c(2,2))
+
+which.min(reg.summary$rss)
+plot(reg.summary$rss ,xlab="Number of Variables ",ylab="RSS", type="l")
+points(6,reg.summary$rss [6],col="red",cex=2,pch =20)
+
+which.max(reg.summary$adjr2)
+plot(reg.summary$adjr2 ,xlab="Number of Variables ", ylab="Adjusted RSq",type="l")
+points(2,reg.summary$adjr2 [2],col="red",cex=2,pch =20)
+
+which.min(reg.summary$cp)
+plot(reg.summary$cp ,xlab="Number of Variables ",ylab="Cp", type="l") 
+points (2,reg.summary$cp [2],col="red",cex=2,pch=20) 
+
+which.min(reg.summary$bic) 
+plot(reg.summary$bic ,xlab="Number of Variables ",ylab="BIC", type="l") 
+points(2,reg.summary$bic [2],col="red",cex=2,pch =20)  
+
+
+### Ridge Regression ###
+x <- model.matrix(mpg~.,Auto)[,c(5,7)]
+y <- Auto$mpg
+
+set.seed(1)
+train <- sample(1:nrow(x), round(nrow(x))/2)
+test <- (-train)
+
+x.train <- x[train,] ### We are setting training sets for the explanatory variables x and response variable y
+y.train <- y[train]
+x.test <- x[test,]### We are setting test sets for the explanatory variables x and response variable y
+y.test <- y[test]
+
+# Set lambda
+grid <- 10^seq(10,-2,length=100)
+ridge.mod <- glmnet(x.train, y.train, alpha = 0, lambda = grid, thresh = 1e-12)
+
+#find best lambda
+set.seed(1)
+cv.out <- cv.glmnet(x.train, y.train, alpha = 0)
+plot(cv.out)
+(bestlam <- cv.out$lambda.min)
+
+# Estimate Coefficients
+ridge.pred <- predict(ridge.mod, s=bestlam, newx=x.test)
+mean((ridge.pred - y.test)^2) #  This shows the MSE with the test set.
+
+out <- glmnet(x,y,alpha=0)
+predict(out, type="coefficients", s=bestlam)[1:3,]
+
+
+
+### Lasso Regression ###
+x <- model.matrix(mpg~.,Auto)[,2:7]
+y <- Auto$mpg
+
+set.seed(1)
+train <- sample(1:nrow(x), round(nrow(x))/2)
+test <- (-train)
+
+x.train <- x[train,] ### We are setting training sets for the explanatory variables x and response variable y
+y.train <- y[train]
+x.test <- x[test,]### We are setting test sets for the explanatory variables x and response variable y
+y.test <- y[test]
+
+# Set lambda
+grid <- 10^seq(10,-2,length=100)
+ridge.mod <- glmnet(x.train, y.train, alpha = 1, lambda = grid, thresh = 1e-12)
+
+#find best lambda
+set.seed(1)
+cv.out <- cv.glmnet(x.train, y.train, alpha = 1)
+plot(cv.out)
+(bestlam <- cv.out$lambda.min)
+
+# Estimate Coefficients
+ridge.pred <- predict(ridge.mod, s=bestlam, newx=x.test)
+mean((ridge.pred - y.test)^2) #  This shows the MSE with the test set.
+
+out <- glmnet(x,y,alpha=1)
+predict(out, type="coefficients", s=bestlam)[1:7,]
+
+
+
+############## Finding MSE for Linear Regression ###########
+x <- model.matrix(Balance~.,Credit)[,c(3,4)]
+y <- Credit$Balance
+
+set.seed(1)
+train <- sample(1:nrow(x), round(nrow(x))/2)
+test <- (-train)
+
+x.train <- x[train,] ### We are setting training sets for the explanatory variables x and response variable y
+y.train <- y[train]
+x.test <- x[test,]### We are setting test sets for the explanatory variables x and response variable y
+y.test <- y[test]
+
+creditlm <- lm(Balance~ Income+Rating, data = Credit)
+coef(creditlm)
+ridge.mod <- glmnet(x, y, alpha = 0, lambda = 0)
+predict(ridge.mod, s = 0, exact = T, type = 'coefficients')[1:3,]
+
+lm.pred <- predict(creditlm, newdata = Credit[test,])
+#check MSE
+mean((lm.pred-y.test)^2)
+
+#########################################
+x <- model.matrix(mpg~.,Auto)[,c(5,7)]
+y <- Auto$mpg
+
+set.seed(1)
+train <- sample(1:nrow(x), round(nrow(x))/2)
+test <- (-train)
+
+x.train <- x[train,] ### We are setting training sets for the explanatory variables x and response variable y
+y.train <- y[train]
+x.test <- x[test,]### We are setting test sets for the explanatory variables x and response variable y
+y.test <- y[test]
+
+autolm <- lm(mpg~ weight+year, data = Auto)
+coef(autolm)
+ridge.mod <- glmnet(x, y, alpha = 0, lambda = 0)
+predict(ridge.mod, s = 0, exact = T, type = 'coefficients')[1:3,]
+
+lm.pred <- predict(autolm, newdata = Auto[test,])
+#check MSE
+mean((lm.pred-y.test)^2)
