@@ -1,0 +1,125 @@
+# Package for fitting SVM
+library(e1071)
+
+# New model libraries
+library(randomForest) # new library added for random forests and bagging
+library(rpart) # new library for CART modeling
+
+# New package for making pretty pictures of CART trees
+library(rpart.plot)
+
+## Library for titanic dataset
+library(titanic)
+
+## Libraries for Plotting our Results
+library(ggplot2)
+library(gridExtra)
+
+## Library for confusion matrix
+library(caret)
+
+## Load the datasets
+data("titanic_train") 
+
+# remove any NAs from the dataset
+titanic_train<- na.omit(titanic_train)
+sum(is.na(titanic_train$Survived))
+
+# Partition of data set into 80% Train and 20% Test datasets
+set.seed(123)  # ensures we all get the sample sample of data for train/test
+
+sampler <- sample(nrow(titanic_train),trunc(nrow(titanic_train)*.80)) # samples index 
+
+Lab.Train <- titanic_train[sampler,]
+Lab.Test <- titanic_train[-sampler,]
+
+## Plot the actual data
+Lab.Test$Survived <- as.character(Lab.Test$Survived)
+
+plotTest <- ggplot(data =Lab.Test,
+                   mapping = aes(x = Age, y = as.factor(Pclass), color = Survived, shape = Sex)) +
+  layer(geom = "point", stat = "identity", position = "identity") +
+  scale_color_manual(values = c("1" = "blue", "0" = "red"), labels = c("No", "Yes")) +
+  theme_bw() +
+  theme(legend.key = element_blank()) +
+  labs(title = "Original Data", y = "Passenger Class")
+plotTest
+
+# build CART model
+Lab.Train$Survived <- factor(Lab.Train$Survived)
+CART <- rpart(Survived ~Pclass+Sex+Age, data=Lab.Train)
+summary(CART)
+
+# Make a plot of the classification tree rules
+prp(CART)
+
+# Summarize and plot the performance of the classification tree
+
+# Get the probability classes for CART model applied to test dataset
+predClassCART <- predict(CART, newdata = Lab.Test, type = "class") 
+
+# Add to our plotting dataframe
+Lab.Test.Plotting <- Lab.Test
+Lab.Test.Plotting$predClassCART <- predClassCART
+
+## Plot the CART class
+plotClassCART <- ggplot(data = Lab.Test.Plotting,
+                        mapping = aes(x = Age, y = Pclass, color = predClassCART, shape = Sex)) +
+  layer(geom = "point", stat = "identity", position = "identity") +
+  scale_color_manual(values = c("0" = "blue", "1" = "red")) +
+  theme_bw() +
+  theme(legend.key = element_blank()) +
+  labs(title = "Predicted class for CART Model")
+
+grid.arrange(plotTest, plotClassCART, nrow = 2)
+
+# Report confusion matrix from on the test dataset
+confusionMatrix(factor(predClassCART), factor(Lab.Test$Survived))
+
+
+#################### Random Forest ####################
+
+# Applyrandom forests model having default target and rest as predictors
+Lab.Train$Sex <- as.numeric(Lab.Train$Sex == "male")
+Lab.Test$Sex <- as.numeric(Lab.Test$Sex == "male")
+
+RandomForest <- randomForest(Survived ~Pclass+Sex+Age, data=Lab.Train, 
+                             importance = TRUE, ntrees = 500)
+
+
+# Summarize and plot the performance of the random forest model
+
+# Get the probability of "yes" for default from second column
+predProbRF <- predict(RandomForest, newdata = Lab.Test, type = "prob")[,2]
+
+# Get the predicted class
+predClassRF <- predict(RandomForest, newdata = Lab.Test, type = "response")
+
+# Add to our plotting dataframe
+Lab.Test.Plotting$predProbRF <- predProbRF
+Lab.Test.Plotting$predClassRF <- factor(predClassRF)
+
+# Plot the RF probability
+plotProbRF <- ggplot(data = Lab.Test.Plotting,
+                     mapping = aes(x = Age, y = as.factor(Pclass), color = predProbRF)) +
+  layer(geom = "point", stat = "identity", position = "identity") +
+  scale_color_gradient(low = "red", high = "blue") +
+  theme_bw() +
+  theme(legend.key = element_blank()) +
+  labs(title = "Predicted Probability for RF Model", y = "Passenger Class", color = "Survival Probability")
+
+# Plot the RF Class
+plotClassRF <- ggplot(data = Lab.Test.Plotting,
+                      mapping = aes(x = Age, y = as.factor(Pclass), color = predClassRF)) + 
+  layer(geom = "point", stat = "identity", position = "identity") +
+  scale_color_manual(values = c("1" = "blue", "0" = "red"), labels = c("No", "Yes")) +
+  theme_bw() +
+  theme(legend.key = element_blank()) +
+  labs(title = "Predicted Class for RF Model", y = "Passenger Class", color = "Survived")
+
+# Standard Performance Plot
+grid.arrange(plotTest, plotProbRF, plotClassRF, nrow = 3)
+
+
+# Report confusion matrix from on the test dataset
+confusionMatrix(factor(predClassRF), factor(Lab.Test$Survived))
