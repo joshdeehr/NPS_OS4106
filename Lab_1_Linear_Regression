@@ -1,0 +1,62 @@
+# Set working directory
+setwd("~/TakeHomeLab")
+
+# Load library
+library(ISLR)
+
+
+##### CREDIT DATASET #####
+
+
+# Credit dataset
+data(Credit)
+
+# View dataset
+summary(Credit)
+
+# Simple Linear Regression
+lm.fit1 <- lm(Balance~Income, data=Credit)
+summary(lm.fit1) # summary of linear model
+coef(lm.fit1) # estimates of coefficients
+confint(lm.fit1) # confidence intervals for each estimate
+
+#Plot
+head(Credit[,2])
+plot(Credit[,2],Credit[,12], main = "Residual Plots", xlab = "Income", 
+     ylab = "Balance", pch = 20) # plot residuals
+abline(lm.fit, col = "blue") # fit regression line
+
+# Plot Residual Lines
+pre <- predict(lm.fit) 
+segments(Credit[,2], Credit[,12], Credit[,2], pre, col="red")
+
+
+# Multiple Linear Regression
+lm.fit2 <- lm(Balance~ Income+Limit+Rating+Cards+Age+Education, data = Credit)
+summary(lm.fit2)
+
+lm.fit3 <- lm(Balance~ Income+Rating, data = Credit)
+summary(lm.fit3)
+coef(lm.fit3)
+confint(lm.fit3)
+
+
+
+##### AUTO DATASET #####
+
+
+# Credit dataset
+data(Auto)
+
+# View dataset
+summary(Auto)
+
+# Multiple Linear Regression
+lm.fit4 <- lm(mpg~ cylinders+displacement+horsepower+weight+acceleration+year, data = Auto) 
+summary(lm.fit4)
+
+lm.fit5 <- lm(mpg~ weight+year, data = Auto) 
+summary(lm.fit5)
+
+lm.fit6 <- lm(mpg~weight, data = Auto_Clean) 
+summary(lm.fit6)
