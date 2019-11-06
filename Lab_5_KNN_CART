@@ -1,0 +1,124 @@
+# Package for fitting SVM
+library(e1071)
+
+# New model libraries
+library(class) # new library for KNN modeling
+library(rpart) # new library for CART modeling
+
+# New package for making pretty pictures of CART trees
+library(rpart.plot)
+
+## Library for titanic dataset
+library(titanic)
+
+## Libraries for Plotting our Results
+library(ggplot2)
+library(gridExtra)
+library(dplyr)
+
+## Library for confusion matrix
+library(caret)
+
+## Load the datasets
+data("titanic_train") ## We will use this dataset as a whole since titanic_test does not have the ddata for survived information
+
+# remove any NAs from the dataset
+titanic_train<- na.omit(titanic_train)
+sum(is.na(titanic_train$Survived))
+
+# Partition of data set into 80% Train and 20% Test datasets
+set.seed(123)  # ensures we all get the sample sample of data for train/test
+
+sampler <- sample(nrow(titanic_train),trunc(nrow(titanic_train)*.80)) # samples index 
+
+Lab.Train <- titanic_train[sampler,]
+Lab.Test <- titanic_train[-sampler,]
+
+## Plot the actual data
+Lab.Test$Survived <- as.character(Lab.Test$Survived)
+
+plotTest <- ggplot(data =Lab.Test,
+                   mapping = aes(x = Age, y = as.factor(Pclass), color = Survived, shape = Sex)) +
+  layer(geom = "point", stat = "identity", position = "identity") +
+  scale_color_manual(values = c("1" = "blue", "0" = "red"), labels = c("No", "Yes")) +
+  theme_bw() +
+  theme(legend.key = element_blank()) +
+  labs(title = "Original Data", y = "Passenger Class")
+plotTest
+
+# Assigning the response 
+train.def <- Lab.Train$Survived
+test.def <- Lab.Test$Survived
+
+
+# Assign explanatory variables
+train.gc <- Lab.Train[,c(3,5,6)]
+test.gc <- Lab.Test[,c(3,5,6)]
+
+train.gc$Sex <- as.numeric(train.gc$Sex == "male")
+test.gc$Sex <- as.numeric(test.gc$Sex == "male")
+
+summary(train.gc)
+summary(test.gc)
+
+# Now we will calculate the proportion of correct classification for k = 1, 5 & 20
+knn.1 <-  knn(train.gc, test.gc, train.def, k=1)
+knn.5 <-  knn(train.gc, test.gc, train.def, k=5)
+knn.20 <- knn(train.gc, test.gc, train.def, k=20)
+
+sum(test.def == knn.1)/length(test.def)  # For knn = 1
+sum(test.def == knn.5)/length(test.def) # For knn = 5
+sum(test.def == knn.20)/length(test.def) # For knn = 20
+
+knn.best <-  knn(train.gc, test.gc, train.def, k=5)
+sum(test.def == knn.best)/length(test.def)  # For knn = 5
+
+# Confusion Matrix 
+confusionMatrix(factor(knn.best), factor(test.def))
+
+# Summarize and plot the performance of the KNN
+
+# Add to our plotting dataframe
+Lab.Test.Plotting <- Lab.Test
+Lab.Test.Plotting$knn.best <- knn.best
+
+## Plot the KNN class
+plotClassKNN <- ggplot(data = Lab.Test.Plotting,
+                       mapping = aes(x = Age, y = as.factor(Pclass), color = knn.best, shape = Sex)) +
+  layer(geom = "point", stat = "identity", position = "identity") +
+  scale_color_manual(values = c("1" = "blue", "0" = "red"), labels = c("No", "Yes")) +
+  theme_bw() +
+  theme(legend.key = element_blank()) +
+  labs(title = "Predicted Class for KNN Model", y = "Passenger Class", color = "Survived")
+
+grid.arrange(plotTest, plotClassKNN, nrow = 2)
+
+
+################ CART ################ 
+Lab.Train$Survived <- factor(Lab.Train$Survived)
+CART <- rpart(Survived ~Pclass+Sex+Age, data=Lab.Train)
+summary(CART)
+
+# Make a plot of the classification tree rules
+prp(CART)
+
+# Summarize and plot the performance of the classification tree
+
+# Get the probability classes for CART model applied to test dataset
+predClassCART <- predict(CART, newdata = Lab.Test, type = "class") 
+
+# Add to our plotting dataframe
+Lab.Test.Plotting$predClassCART <- predClassCART
+
+## Plot the CART class
+plotClassCART <- ggplot(data = Lab.Test.Plotting,
+                        mapping = aes(x = Age, y = as.factor(Pclass), color = predClassCART, shape = Sex)) +
+  layer(geom = "point", stat = "identity", position = "identity") +
+  scale_color_manual(values = c("1" = "blue", "0" = "red"), labels = c("No", "Yes")) +
+  theme_bw() +
+  theme(legend.key = element_blank()) +
+  labs(title = "Predicted class for CART Model", y = "Passenger Class", color = "Survived")
+grid.arrange(plotTest, plotClassCART, nrow = 2)
+
+# Report confusion matrix from on the test dataset
+confusionMatrix(factor(predClassCART), factor(Lab.Test$Survived))
