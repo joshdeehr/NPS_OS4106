@@ -1,0 +1,105 @@
+# Load test/train data
+load("SVM_Titanic.RData")
+
+# Package for fitting SVM
+library(e1071)
+
+## Library for titanic dataset
+library(titanic)
+
+## Libraries for Plotting our Results
+library(ggplot2)
+library(gridExtra)
+
+## Library for confusion matrix
+library(caret)
+
+# Set a seed value so get same answer each time we fit
+set.seed(123)
+
+# Apply SVM model using linear kernel having Survived target and rest three as predictors
+SVM.1 <- svm(Survived ~ Age + Pclass + Sex, data=Lab.Train, kernel="linear",
+             cost=1,gamma=1,
+             probability=TRUE, decision.values=TRUE)
+summary(SVM.1)
+
+# Get the probabilities predicted by SVM
+predProbSVM.raw <-predict(SVM.1, Lab.Test, probability = TRUE)
+# This is different from Default dataset. 
+summary(predProbSVM.raw)
+
+# So think as the estimated value as the probability of being survived.
+predProbSVM.1 <- predProbSVM.raw
+# Get the probability classes
+predClassSVM.1 <- predict(SVM.1, newdata = Lab.Test)
+summary(predClassSVM.1)
+
+# Create a plotting version of the Default dataset where we will store model predictions
+Lab.Test.Plotting <- Lab.Test
+
+# Attach to our plotting dataframe
+Lab.Test.Plotting$predProbSVM.1  <- predProbSVM.1
+Lab.Test.Plotting$predClassSVM.1 <- predClassSVM.1 
+
+
+
+# plot actual data
+plotTest<-ggplot(data = Lab.Test.Plotting,
+                 mapping = aes(x = Age, y = as.factor(Pclass), color = as.factor(Survived), shape = Sex)) +
+  layer(geom = "point", stat = "identity", position = "identity") +
+  scale_color_manual(values = c("1" = "blue", "0" = "red"), labels = c("No", "Yes")) +
+  theme_bw() +
+  theme(legend.key = element_blank()) +
+  labs(title = "Test Data", y = "Passenger Class", color = "Survived")
+
+# Plot (probability)
+plotSVM.1 <- ggplot(data = Lab.Test.Plotting,
+                    mapping = aes(x = Age, y = as.factor(Pclass), color = predProbSVM.1, shape = Sex)) +
+  layer(geom = "point",stat = "identity", position = "identity") +
+  scale_color_gradient(low = "red", high = "blue") +
+  theme_bw() +
+  theme(legend.key = element_blank()) +
+  labs(title = "Predicted probability of outcome (SVM)", color = "Chance of Survival", y = "Passenger Class")
+
+## Plot the class using threshold of 0.5
+plotSVMClass <- ggplot(data = Lab.Test.Plotting,
+                       mapping = aes(x = Age, y = as.factor(Pclass), color = predClassSVM.1, shape = Sex)) +
+  layer(geom = "point", stat = "identity", position = "identity") +
+  scale_color_gradient(low = "red", high = "blue") +
+  theme_bw() +
+  theme(legend.key = element_blank()) +
+  labs(title = "Predicted outcome (SVM: p>0.5)", color = "Chance of Survival", y = "Passenger Class")
+
+# Plot original data (top row), predicted probability (second row), and assigned class (third row)
+grid.arrange(plotTest, plotSVM.1, plotSVMClass, nrow = 3)
+
+# We have to convert numerical values between 0 and 1 to classes 0 and 1.  
+predClassSVM.1 <- as.numeric(predClassSVM.1 > 0.5)
+# Report confusion matrix from SVM model for comparison
+confusionMatrix(data=factor(predClassSVM.1),reference=factor(Lab.Test$Survived))
+
+
+############# TUNING ##################
+
+# Balance data using weights from training dataset
+wts <- 100/table(Lab.Train$Survived)
+
+#Now we build a tuned SVM model using the tune function
+set.seed(123)
+SVM.Tuned=tune(svm, Survived ~ Age + Pclass + Sex, data=Lab.Train, kernel="linear", probability = TRUE,
+               class.weight=wts,  ranges=list(cost=c(0.1,1,10,100,1000),
+               gamma=c(0.5,1,2,3,4)))
+
+summary(SVM.Tuned)
+
+# Now extract the best model
+SVM.Best<-SVM.Tuned$best.model
+
+# Calculate tuned model performance on the test dataset
+predClassSVMBest=predict(SVM.Best, Lab.Test)
+
+# We have to convert numerical values between 0 and 1 to classes 0 and 1.  
+predClassSVMBest <- as.numeric(predClassSVMBest > 0.5)
+
+# Report confusion matrix from on the test dataset
+confusionMatrix(data=factor(predClassSVMBest),reference=factor(Lab.Test$Survived))
