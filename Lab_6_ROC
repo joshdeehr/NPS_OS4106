@@ -1,0 +1,77 @@
+### Load previously needed libraries
+library(e1071)
+library(titanic)
+library(ggplot2)
+library(gridExtra)
+library(class)
+library(rpart) 
+library(rpart.plot)
+library(caret)
+
+# New library for calculating ROC curves
+library(ROCR)
+
+# Logistic regression
+predProbLogit <- predict(Logit.step, type = "response", newdata = Lab.Test)
+# SVM model - note that probability of "Yes" for default is in second column
+predProbSVM <- predict(SVM.Best, Lab.Test)
+# KNN model
+knn.best.prob <-  knn(train.gc, test.gc, train.def, k=5, prob=TRUE)
+# CART model
+predProbCART <- predict(CART, newdata = Lab.Test, type = "prob")[,2]
+
+# Calculate ROC statistics for our best logit model
+Logit.ROC <- performance(prediction(predProbLogit, Lab.Test$Survived), measure="tpr", 
+                         x.measure="fpr")
+# SVM 
+SVM.ROC <- performance(prediction(predProbSVM, Lab.Test$Survived), 
+                       measure="tpr", x.measure="fpr")
+# KNN model
+KNN.prob <- rep(0, length(knn.best.prob)) ## Initializing 
+### we want to assign to knn_prob the probability that the passenger will survive 
+### (attr(knn_obj, 'prob')  is the proportion of the votes for the winning class
+### this means it will always be greater that 0.5 and may either be for survived or perished
+for(i in 1:length(KNN.prob))
+  KNN.prob[i] <- ifelse(knn.best.prob[i] != 0, attr(knn.best.prob, 'prob')[i], 
+                        1 - attr(knn.best.prob, 'prob')[i])
+predProbKNN <- prediction(KNN.prob, Lab.Test$Survived)
+KNN.ROC <- performance(predProbKNN, measure="tpr", x.measure="fpr")
+# CART model
+CART.ROC <- performance(prediction(predProbCART, Lab.Test$Survived), measure="tpr", 
+                        x.measure="fpr")
+
+
+### Plot our ROC Performance with Logit as base
+plot(Logit.ROC, lwd=2, main = "ROC Comparison for Models on Lab Test Dataset")
+
+# Add SVM
+lines(attributes(SVM.ROC)$x.values[[1]], attributes(SVM.ROC)$y.values[[1]], 
+      col="red", lwd=2)
+
+# Add RF
+lines(attributes(KNN.ROC)$x.values[[1]], attributes(KNN.ROC)$y.values[[1]], 
+      col="blue", lwd=2)
+
+# Add GPM 
+lines(attributes(CART.ROC)$x.values[[1]], attributes(CART.ROC)$y.values[[1]], 
+      col="green", lwd=2)
+
+#Add Legend
+legend(x=.5, y=.6, c("Logistic (Step)", "SVM", "KNN", "CART"), 
+       col=c("black", "red", "blue", "green"), lwd=c(2,2,2,2))
+
+Logit.AUC <- performance(prediction(predProbLogit, Lab.Test$Survived), 
+                         measure="auc")@y.values
+SVM.AUC <- performance(prediction(predProbSVM, Lab.Test$Survived), 
+                       measure="auc")@y.values
+
+KNN.AUC <- performance(prediction(KNN.prob, Lab.Test$Survived), 
+                       measure="auc")@y.values
+
+CART.AUC <- performance(prediction(predProbCART, Lab.Test$Survived), 
+                        measure="auc")@y.values
+
+Logit.AUC
+SVM.AUC
+KNN.AUC
+CART.AUC
