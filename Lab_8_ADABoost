@@ -1,0 +1,203 @@
+# Package for fitting SVM
+library(e1071)
+
+# New model libraries
+library(fastAdaboost)
+
+## Library for titanic dataset
+library(titanic)
+
+## Libraries for Plotting our Results
+library(ggplot2)
+library(gridExtra)
+
+## Libraries for ROC curve, RF, etc.
+library(class) 
+library(rpart) 
+library(rpart.plot)
+library(ROCR)
+library(randomForest) 
+
+## Library for confusion matrix
+library(caret)
+
+## Load the datasets
+data("titanic_train") 
+
+# remove any NAs from the dataset
+titanic_train<- na.omit(titanic_train)
+sum(is.na(titanic_train$Survived))
+
+# Partition of data set into 80% Train and 20% Test datasets
+set.seed(123)  # ensures we all get the sample sample of data for train/test
+
+sampler <- sample(nrow(titanic_train),trunc(nrow(titanic_train)*.80)) # samples index 
+
+Lab.Train <- titanic_train[sampler,]
+Lab.Test <- titanic_train[-sampler,]
+
+## Plot the actual data
+Lab.Test$Survived <- as.character(Lab.Test$Survived)
+
+plotTest <- ggplot(data =Lab.Test,
+                   mapping = aes(x = Age, y = as.factor(Pclass), color = Survived, shape = Sex)) +
+  layer(geom = "point", stat = "identity", position = "identity") +
+  scale_color_manual(values = c("1" = "blue", "0" = "red"), labels = c("No", "Yes")) +
+  theme_bw() +
+  theme(legend.key = element_blank()) +
+  labs(title = "Original Data", y = "Passenger Class")
+plotTest
+
+# Now I am making a new dataset with Sex as categorical data structure.
+Lab.Train.sex <- Lab.Train
+Lab.Test.sex <- Lab.Test
+
+# Now I am making Sex as numerical here.
+Lab.Train$Sex <- as.numeric(Lab.Train$Sex == "male")
+Lab.Test$Sex <- as.numeric(Lab.Test$Sex == "male")
+
+# ADABOOST model
+ADA <- adaboost(Survived ~ Age + Pclass + Sex, data=Lab.Train.sex, nIter=500)
+summary(ADA)
+
+# Make a plot of the top classification tree rules
+get_tree(ADA,1)
+
+# Summarize and plot the performance of the adaboost on classification trees.
+
+# Get the probability classes for adaboost model applied to test dataset
+predADA <- predict(ADA, newdata = Lab.Test.sex) 
+predClassADA <- predADA$class
+
+# Add to our plotting dataframe
+Lab.Test.Plotting <- Lab.Test
+Lab.Test.Plotting$predClassADA <- predClassADA
+
+## Plot the adaboost class
+plotClassADA <- ggplot(data = Lab.Test.Plotting,
+                       mapping = aes(x = Age, y = Pclass, color = predClassADA, shape = as.factor(Sex))) +
+  layer(geom = "point", stat = "identity", position = "identity") +
+  scale_color_manual(values = c("0" = "blue", "1" = "red")) +
+  theme_bw() +
+  theme(legend.key = element_blank()) +
+  labs(title = "Predicted class for ADAboost Model")
+plotClassADA
+
+grid.arrange(plotTest, plotClassADA, nrow = 2)
+
+# Report confusion matrix from on the test dataset
+confusionMatrix(factor(predClassADA), factor(Lab.Test.sex$Survived))
+
+
+
+# Summarize and plot the performance of the adaboost model
+
+# Get the probability of "yes" for default from second column
+predProbADA <- predADA$prob[,2]
+
+# Add to our plotting dataframe
+Lab.Test.Plotting$predProbADA <- predProbADA
+
+# Plot the ADA probability
+plotProbADA <- ggplot(data = Lab.Test.Plotting,
+                      mapping = aes(x = Age, y = as.factor(Pclass), color = predProbADA)) +
+  layer(geom = "point", stat = "identity", position = "identity") +
+  scale_color_gradient(low = "red", high = "blue") +
+  theme_bw() +
+  theme(legend.key = element_blank()) +
+  labs(title = "Predicted Probability for ADA Model", y = "Passenger Class", color = "Survival Probability")
+
+# Plot the RF Class
+plotClassADA <- ggplot(data = Lab.Test.Plotting,
+                       mapping = aes(x = Age, y = as.factor(Pclass), color = predClassADA)) + 
+  layer(geom = "point", stat = "identity", position = "identity") +
+  scale_color_manual(values = c("1" = "blue", "0" = "red"), labels = c("No", "Yes")) +
+  theme_bw() +
+  theme(legend.key = element_blank()) +
+  labs(title = "Predicted Class for ADA Model", y = "Passenger Class", color = "Survived")
+
+# Standard Performance Plot
+grid.arrange(plotTest, plotProbADA, plotClassADA, nrow = 3)
+
+
+# Logit
+Logit.ROC <- performance(prediction(predProbLogit, Lab.Test.sex$Survived), measure="tpr", x.measure="fpr")
+# SVM 
+predProbSVM <- predict(SVM.Best, Lab.Test.sex)
+SVM.ROC <- performance(prediction(predProbSVM, Lab.Test.sex$Survived), 
+                       measure="tpr", x.measure="fpr")
+# KNN model
+knn.best.prob <-  knn(train.gc, test.gc, train.def, k=5, prob=TRUE)
+KNN.prob <- rep(0, length(knn.best.prob)) ## Initializing 
+### we want to assign to knn_prob the probability that the passenger will survive 
+### (attr(knn_obj, 'prob')  is the proportion of the votes for the winning class
+### this means it will always be greater that 0.5 and may either be for survived or perished
+for(i in 1:length(KNN.prob))
+  KNN.prob[i] <- ifelse(knn.best.prob[i] != 0, attr(knn.best.prob, 'prob')[i], 1 - attr(knn.best.prob, 'prob')[i])
+predProbKNN <- prediction(KNN.prob, Lab.Test$Survived)
+KNN.ROC <- performance(predProbKNN, measure="tpr", x.measure="fpr")
+# CART model
+predProbCART <- predict(CART, newdata = Lab.Test.sex, type = "prob")[,2]
+CART.ROC <- performance(prediction(predProbCART, Lab.Test$Survived), measure="tpr", x.measure="fpr")
+# Random Forest
+predProbRF <- predict(RandomForest, newdata = Lab.Test, type = "prob")[,2]
+RF.ROC <- performance(prediction(predProbRF, Lab.Test.sex$Survived), 
+                      measure="tpr", x.measure="fpr")
+# Adaboost
+ADA.ROC <- performance(prediction(predProbADA, Lab.Test.sex$Survived), 
+                       measure="tpr", x.measure="fpr")
+
+
+### Plot our ROC Performance with Logit as base
+plot(Logit.ROC, lwd=2, main = "ROC Comparison for Models on Lab Test Dataset")
+
+# Add SVM
+lines(attributes(SVM.ROC)$x.values[[1]], attributes(SVM.ROC)$y.values[[1]], 
+      col="red", lwd=2)
+
+# Add KNN
+lines(attributes(KNN.ROC)$x.values[[1]], attributes(KNN.ROC)$y.values[[1]], 
+      col="blue", lwd=2)
+
+# Add CART 
+lines(attributes(CART.ROC)$x.values[[1]], attributes(CART.ROC)$y.values[[1]], 
+      col="green", lwd=2)
+
+# Add RF
+lines(attributes(RF.ROC)$x.values[[1]], attributes(RF.ROC)$y.values[[1]], 
+      col="Brown", lwd=2)
+
+# Add Adaboost
+lines(attributes(ADA.ROC)$x.values[[1]], attributes(ADA.ROC)$y.values[[1]], 
+      col="Pink", lwd=2)
+
+#Add Legend
+legend(x=.3, y=.6, c("Logistic (Step)", "SVM", "KNN", "CART", "RF", "ADA"), 
+       col=c("black", "red", "blue", "green", "Brown", "Pink"), lwd=c(1,1,1,1,1,1), ncol = 2)
+
+
+### Compute AUC ###
+
+Logit.AUC <- performance(prediction(predProbLogit, Lab.Test$Survived), 
+                         measure="auc")@y.values
+SVM.AUC <- performance(prediction(predProbSVM, Lab.Test$Survived), 
+                       measure="auc")@y.values
+
+KNN.AUC <- performance(prediction(KNN.prob, Lab.Test$Survived), 
+                       measure="auc")@y.values
+
+CART.AUC <- performance(prediction(predProbCART, Lab.Test$Survived), 
+                        measure="auc")@y.values
+
+RF.AUC <- performance(prediction(predProbRF, Lab.Test$Survived), 
+                      measure="auc")@y.values
+
+ADA.AUC <- performance(prediction(predProbADA, Lab.Test$Survived), 
+                       measure="auc")@y.values
+
+Logit.AUC
+SVM.AUC
+KNN.AUC
+CART.AUC
+RF.AUC
+ADA.AUC 
